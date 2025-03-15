@@ -1,10 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 import cv2
 import numpy as np
-import ultralytics
 from ultralytics import YOLO
-from io import BytesIO
-import torch
 
 app = FastAPI()
 

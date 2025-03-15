@@ -46,5 +46,5 @@ while cap.isOpened():
         break
 
 # Liberar recursos
-captura.release()
+cap.release()
 cv2.destroyAllWindows()
