@@ -1,0 +1,22 @@
+INSTRUCCIONES PARA EJECUTAR EL SERVIDOR CON FASTAPI
+
+- Primero se debe instalar las dependencias de fastapi:
+	pip install "fastapi[standard]"
+
+- Luego se debe instalar uvicorn que es el que servira para levantar el servido':
+	pip install uvicorn
+
+- Para finalizar, se ejecuta normalmente el archivo llamado: "servidorRealTimeDetection.py". Si esta correcto se
+  mostrará en consola los siguientes mensajes:
+	INFO:     Started server process [468028]
+	INFO:     Waiting for application startup.
+	INFO:     Application startup complete.
+	INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+
+- Para el consumo, se utilizó el archivo llamado: "requestRealTimeDetection.py". En este se hace el llamado de la api
+  mediante el url: "http://localhost:8000/detectar-objetos/"
+
+Cabe destacar que como el servicio al estar trabajando con un video en tiempo real el cliente manda cada frame al
+servidor a ser analizado y este devuelve informacion en tipo json que es leido por parte del cliente y posteriormente
+graficando el area de interes y el objeto detectado. Dicho proceso hace que el rendimiento detectado disminuye
+comparandolo con el codigo ejecutado sin esta logica de cliente-servidor.

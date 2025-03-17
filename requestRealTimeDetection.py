@@ -20,7 +20,6 @@ while cap.isOpened():
         if resultado["objetos"]:
             print("Objetos detectados:", resultado["objetos"])
             for resultado_frame in resultado["objetos"]:
-                print("data: ", resultado_frame["objeto"])
                 x1, y1, x2, y2 = resultado_frame["coordenadas"]  # Coordenadas de la caja
                 conf = resultado_frame["confianza"]  # Confianza del modelo
                 clase = resultado_frame["objeto"]  # Clase detectada
