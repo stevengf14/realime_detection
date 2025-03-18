@@ -6,7 +6,7 @@ from ultralytics import YOLO
 app = FastAPI()
 
 # Cargar el modelo YOLOv8
-modelo_yolo = YOLO("yolov8n.pt")  # Asegúrate de descargar este modelo previamente
+modelo_yolo = YOLO("../yolov8n.pt")  # Asegúrate de descargar este modelo previamente
 
 @app.post("/detectar-objetos/")
 async def detectar_objetos(archivo: UploadFile = File(...)):
