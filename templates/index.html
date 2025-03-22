@@ -210,6 +210,9 @@
                             <button id="resetButton" class="btn btn-warning ms-2">
                                 <i class="fas fa-sync-alt me-2"></i>Reiniciar
                             </button>
+                            <button id="updateModelButton" class="btn btn-info ms-2">
+                                <i class="fas fa-database me-2"></i>Actualizar Modelo
+                            </button>
                         </div>
                         
                         <!-- Alerta para mostrar errores -->
@@ -242,6 +245,18 @@
                         <div class="alert alert-primary mt-4">
                             <i class="fas fa-lightbulb me-2"></i>
                             <strong>Consejo:</strong> Para mejores resultados, utilice imágenes con buena iluminación y rostro frontal.
+                        </div>
+                        
+                        <h5 class="card-title mt-4">Motor de Reconocimiento</h5>
+                        <p>Este sistema utiliza <strong>FaceNet + PyTorch</strong> con redes neuronales profundas para reconocimiento facial de alta precisión.</p>
+                        <ul>
+                            <li>Detección de rostros con MTCNN</li>
+                            <li>Embeddings faciales con InceptionResnetV1</li>
+                            <li>Comparación mediante similitud de coseno</li>
+                        </ul>
+                        
+                        <div class="alert alert-success mt-3" id="modelInfo">
+                            <i class="fas fa-check-circle me-2"></i>Cargando información del modelo...
                         </div>
                     </div>
                 </div>
@@ -286,7 +301,7 @@
     <!-- Pie de página -->
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2023 Sistema de Reconocimiento Facial</p>
+            <p>&copy; 2025 Sistema de Reconocimiento Facial</p>
         </div>
     </footer>
 
@@ -297,6 +312,7 @@
             const startButton = document.getElementById('startButton');
             const stopButton = document.getElementById('stopButton');
             const resetButton = document.getElementById('resetButton');
+            const updateModelButton = document.getElementById('updateModelButton');
             const videoFeed = document.getElementById('videoFeed');
             const statusIndicator = document.getElementById('statusIndicator');
             const statusText = document.getElementById('statusText');
@@ -304,6 +320,7 @@
             const loadingOverlay = document.getElementById('loadingOverlay');
             const errorAlert = document.getElementById('errorAlert');
             const errorMessage = document.getElementById('errorMessage');
+            const modelInfo = document.getElementById('modelInfo');
             
             let cameraActive = false;
             let selectedCameraId = "0"; // Cámara por defecto
@@ -479,10 +496,93 @@
                 }
             });
             
+            // Manejar actualización del modelo
+            updateModelButton.addEventListener('click', async () => {
+                if (cameraActive) {
+                    showError("Detenga la cámara antes de actualizar el modelo");
+                    return;
+                }
+                
+                infoText.textContent = "Actualizando modelo...";
+                updateModelButton.disabled = true;
+                
+                try {
+                    const response = await fetch('/update_model', {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    console.log(data);
+                    
+                    if (response.ok) {
+                        modelInfo.innerHTML = `
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Modelo cargado:</strong> ${data.known_faces} rostros registrados
+                        `;
+                        modelInfo.classList.remove('alert-warning');
+                        modelInfo.classList.add('alert-success');
+                    } else {
+                        showError(`Error: ${data.status}`);
+                        modelInfo.innerHTML = `
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Error al cargar modelo:</strong> ${data.status}
+                        `;
+                        modelInfo.classList.remove('alert-success');
+                        modelInfo.classList.add('alert-warning');
+                    }
+                } catch (error) {
+                    console.error('Error al actualizar modelo:', error);
+                    showError("Error al comunicarse con el servidor");
+                    modelInfo.innerHTML = `
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> No se pudo actualizar el modelo
+                    `;
+                    modelInfo.classList.remove('alert-success');
+                    modelInfo.classList.add('alert-warning');
+                } finally {
+                    updateModelButton.disabled = false;
+                    infoText.textContent = "";
+                }
+            });
+            
+            // Obtener información inicial del modelo
+            async function getModelInfo() {
+                try {
+                    const response = await fetch('/status');
+                    if (!response.ok) throw new Error('Error en la petición');
+                    
+                    const data = await response.json();
+                    
+                    if (data.known_faces > 0) {
+                        modelInfo.innerHTML = `
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Modelo cargado:</strong> ${data.known_faces} rostros registrados
+                        `;
+                        modelInfo.classList.remove('alert-warning');
+                        modelInfo.classList.add('alert-success');
+                    } else {
+                        modelInfo.innerHTML = `
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Aviso:</strong> No hay rostros registrados en el modelo
+                        `;
+                        modelInfo.classList.remove('alert-success');
+                        modelInfo.classList.add('alert-warning');
+                    }
+                } catch (error) {
+                    console.error('Error al obtener información del modelo:', error);
+                    modelInfo.innerHTML = `
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> No se pudo obtener información del modelo
+                    `;
+                    modelInfo.classList.remove('alert-success');
+                    modelInfo.classList.add('alert-warning');
+                }
+            }
+            
             // Inicializar estado
             updateStatus(false, "Cámara detenida");
             
-            // Verificar estado inicial
+            // Verificar estado inicial y obtener info del modelo
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
@@ -493,8 +593,14 @@
                         infoText.textContent = "Detectando rostros...";
                         videoFeed.src = "{{ url_for('video_feed') }}?" + new Date().getTime();
                     }
+                    
+                    // Actualizar info del modelo
+                    getModelInfo();
                 })
-                .catch(error => console.error('Error al verificar estado inicial:', error));
+                .catch(error => {
+                    console.error('Error al verificar estado inicial:', error);
+                    getModelInfo();
+                });
         });
     </script>
 </body>

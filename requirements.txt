@@ -5,3 +5,7 @@ face-recognition
 numpy
 flask
 Pillow
+torch
+facenet-pytorch
+torchvision
+scikit-learn

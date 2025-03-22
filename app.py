@@ -4,14 +4,14 @@ import os
 import time
 import threading
 import numpy as np
-import face_recognition
 from PIL import Image
-import random
+import pickle
+import traceback
+from face_recognition_model import FaceNetRecognizer
 
 # Configuración para optimización de rendimiento
 FRAME_RESIZE_FACTOR = 0.5  # Reducir el tamaño del frame para procesar menos píxeles
 PROCESS_EVERY_N_FRAMES = 3  # Procesar cada N frames para mejorar rendimiento
-RECOGNITION_TOLERANCE = 0.6  # Umbral de tolerancia para reconocimiento facial (menor = más estricto)
 
 app = Flask(__name__)
 
@@ -20,213 +20,295 @@ camera = None
 output_frame = None
 lock = threading.Lock()
 is_camera_running = False
-known_face_encodings = []
-known_face_names = []
-face_cascade = None
+face_recognizer = None
 face_tracking = {}
 FACE_MEMORY_FRAMES = 15
-ivan_tracking_id = None
+tracking_id = None
+
+# Ruta donde guardar/cargar el modelo
+MODEL_PATH = "model/facenet_encodings.pkl"
 
 def load_faces():
-    global known_face_encodings, known_face_names, face_cascade
+    global face_recognizer
     
-    # Carga el clasificador de rostros
-    face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    if not os.path.exists(face_cascade_path):
-        raise Exception(f"No se encontró el clasificador de rostros en {face_cascade_path}")
-    face_cascade = cv2.CascadeClassifier(face_cascade_path)
-    print("Clasificador de rostros cargado correctamente")
-    
-    # Verificar que la ruta 'people' exista
-    people_folder = "people"
-    if not os.path.exists(people_folder):
-        os.makedirs(people_folder)
-        print(f"Se ha creado la carpeta '{people_folder}'. Por favor, agrega imágenes de personas en subcarpetas con el nombre de cada persona.")
-        return
-    
-    # Inicializar contador
-    person_count = 0
-    
-    # Buscar imágenes directamente en la carpeta people
-    direct_images = [f for f in os.listdir(people_folder) if os.path.isfile(os.path.join(people_folder, f)) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
-    print(f"Se encontraron {len(direct_images)} imágenes directamente en la carpeta people")
-    
-    # MANEJO ESPECÍFICO PARA IVAN.JPG
-    if "Ivan.jpg" in direct_images or "ivan.jpg" in direct_images:
-        print("¡Se encontró imagen de Ivan! Intentando cargar con método especial...")
-        ivan_filename = "Ivan.jpg" if "Ivan.jpg" in direct_images else "ivan.jpg"
-        ivan_path = os.path.join(people_folder, ivan_filename)
+    try:
+        print("\n=== INICIANDO CARGA DE ROSTROS ===")
         
-        try:
-            # Método 1: Cargar con PIL/Pillow
+        # Eliminar el modelo anterior si existe
+        if os.path.exists(MODEL_PATH):
+            print(f"Eliminando modelo anterior: {MODEL_PATH}")
             try:
-                pil_img = Image.open(ivan_path)
-                pil_img = pil_img.convert('RGB')
-                img_array = np.array(pil_img)
+                os.remove(MODEL_PATH)
+                print("Modelo anterior eliminado correctamente")
+            except Exception as e:
+                print(f"No se pudo eliminar el modelo anterior: {e}")
+        
+        # Crear directorio para el modelo si no existe
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        
+        # Inicializar el reconocedor facial con ajustes más permisivos
+        face_recognizer = FaceNetRecognizer(
+            model_path=None,  # Forzar recarga desde imágenes
+            people_folder='people',
+            face_confidence=0.8  # Más permisivo para detección
+        )
+        
+        # Verificar si se cargaron rostros
+        if len(face_recognizer.known_face_names) == 0:
+            print("\n⚠️ ADVERTENCIA: No se cargaron rostros conocidos")
+            print("Verificando si existe Ivan.jpg en la carpeta 'people'...")
+            
+            ivan_path = os.path.join('people', 'Ivan.jpg')
+            if os.path.exists(ivan_path):
+                print(f"¡Se encontró {ivan_path}! Intentando cargar manualmente...")
                 
-                face_encodings = face_recognition.face_encodings(img_array)
+                # Cargar manualmente la imagen de Ivan
+                success = face_recognizer._process_ivan_image(ivan_path, "Ivan")
                 
-                if face_encodings:
-                    known_face_encodings.append(face_encodings[0])
-                    known_face_names.append("Ivan")
-                    person_count += 1
-                    print("Rostro de Ivan cargado con éxito usando PIL")
+                if success:
+                    print("✅ Ivan cargado manualmente con éxito")
                 else:
-                    raise Exception("No se pudo codificar")
-                
-            except Exception as pil_error:
-                print(f"Error con PIL: {pil_error}")
-                
-                # Método 2: Crear encoding artificial
-                print("Intentando crear imagen desde cero...")
-                
-                random.seed(42)
-                artificial_encoding = np.array([random.uniform(-1, 1) for _ in range(128)])
-                artificial_encoding = artificial_encoding / np.linalg.norm(artificial_encoding)
-                
-                known_face_encodings.append(artificial_encoding)
-                known_face_names.append("Ivan")
-                person_count += 1
-                print("Se creó un encoding artificial para Ivan")
-                
-        except Exception as e:
-            print(f"Todos los métodos fallaron para Ivan.jpg: {e}")
-    
-    # Procesar otras imágenes en la carpeta principal y subcarpetas
-    # [código simplificado - solo cargamos Ivan para mantenerlo simple]
-    
-    print(f"Se cargaron {person_count} rostros para reconocimiento facial")
-    if person_count == 0:
-        print("¡ADVERTENCIA! No se cargaron rostros.")
+                    print("❌ No se pudo cargar Ivan manualmente")
+            else:
+                print(f"❌ No se encontró {ivan_path}")
+                print("Por favor, añade imágenes a la carpeta 'people'")
+        
+        # Guardar el modelo para uso futuro
+        if len(face_recognizer.known_face_names) > 0:
+            try:
+                face_recognizer.save_model(MODEL_PATH)
+                print(f"✅ Modelo guardado en {MODEL_PATH} con {len(face_recognizer.known_face_names)} rostros")
+            except Exception as e:
+                print(f"❌ Error al guardar modelo: {e}")
+                traceback.print_exc()
+        
+        print(f"\n=== ROSTROS CARGADOS: {len(face_recognizer.known_face_names)} ===")
+        if len(face_recognizer.known_face_names) > 0:
+            print(f"Nombres: {', '.join(face_recognizer.known_face_names)}")
+        print("=====================================\n")
+            
+    except Exception as e:
+        print(f"Error grave al cargar rostros: {e}")
+        traceback.print_exc()
+        # Crear un reconocedor vacío para evitar errores
+        face_recognizer = FaceNetRecognizer(
+            model_path=None,
+            people_folder='people'
+        )
 
 def detect_and_recognize_faces(frame):
-    global known_face_encodings, known_face_names, face_cascade, face_tracking, ivan_tracking_id
+    global face_recognizer, face_tracking, tracking_id
     
     # Redimensionar el frame para procesar más rápido
     small_frame = cv2.resize(frame, (0, 0), fx=FRAME_RESIZE_FACTOR, fy=FRAME_RESIZE_FACTOR)
-    
-    # Solo procesar cada N frames
-    should_process = True  # Simplificado para la web
     
     # Variables para este frame
     current_face_locations = []
     current_face_names = []
     current_face_confidences = []
     
+    # Verificar que el reconocedor facial está inicializado
+    if face_recognizer is None:
+        print("Error: FaceNetRecognizer no está inicializado")
+        processed_frame = frame.copy()
+        cv2.putText(processed_frame, "Error: Reconocedor no inicializado", 
+                   (10, frame.shape[0] - 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        return processed_frame
+    
+    # Verificar si Ivan está cargado
+    ivan_loaded = "Ivan" in face_recognizer.known_face_names
+    
+    # Contamos frames para procesar solo algunos (mejora rendimiento)
+    current_timestamp = time.time()
+    frame_counter = int(current_timestamp * 10) % PROCESS_EVERY_N_FRAMES
+    should_process = frame_counter == 0
+    
+    # Información para depuración
     if should_process:
-        # Detectar rostros usando Haar Cascade
-        gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        
-        if len(faces) > 0:
-            # Si hay rostros detectados, convertir el frame a RGB
-            rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        print(f"\n--- Procesando frame {int(current_timestamp)} ---")
+    
+    # Detectar rostros reales solo en algunos frames para mejorar rendimiento
+    if should_process:
+        try:
+            # Método 1: Usar detector Haar Cascade (más rápido y estable)
+            gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
             
-            # Procesar cada rostro detectado
-            for (x, y, w, h) in faces:
-                # Guardar las coordenadas para dibujar después
-                current_face_locations.append((x, y, w, h))
+            # Crear clasificador si no existe
+            if not hasattr(face_recognizer, 'cascade'):
+                cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                face_recognizer.cascade = cv2.CascadeClassifier(cascade_path)
+                print("Inicializado detector Haar Cascade")
+            
+            # Detectar rostros
+            faces = face_recognizer.cascade.detectMultiScale(
+                gray, 
+                scaleFactor=1.1, 
+                minNeighbors=5, 
+                minSize=(30, 30),
+                flags=cv2.CASCADE_SCALE_IMAGE
+            )
+            
+            if len(faces) > 0:
+                print(f"Detector Haar encontró {len(faces)} rostros")
                 
-                # Si hay rostros conocidos para comparar
-                if known_face_encodings:
+                # Convertir detecciones Haar al formato esperado
+                for (x, y, w, h) in faces:
+                    # Guardar ubicación (x, y, w, h)
+                    face_loc = (x, y, w, h)
+                    
+                    # Extraer la región del rostro
                     try:
-                        # Verificar que las coordenadas son válidas
-                        if y >= 0 and y+h <= rgb_small_frame.shape[0] and x >= 0 and x+w <= rgb_small_frame.shape[1]:
-                            # Extraer la región del rostro
-                            face_region = rgb_small_frame[y:y+h, x:x+w]
+                        face_region = small_frame[y:y+h, x:x+w]
+                        if face_region.size == 0:
+                            print("Región de rostro vacía, omitiendo")
+                            continue
                             
-                            # Verificar región válida
-                            if face_region.size == 0 or face_region.shape[0] == 0 or face_region.shape[1] == 0:
-                                raise ValueError("Región facial inválida")
-                                
-                            # Redimensionar para procesamiento
-                            face_region_resized = cv2.resize(face_region, (150, 150))
+                        # Usar FaceNet para comparar con rostros conocidos
+                        name, confidence = face_recognizer.identify_face(face_region)
+                        
+                        # Solo agregar rostros conocidos con confianza suficiente
+                        if name != "Desconocido" and confidence >= 40:
+                            current_face_locations.append(face_loc)
+                            current_face_names.append(name)
+                            current_face_confidences.append(confidence)
                             
-                            # Enfoque simplificado para Ivan
-                            if "Ivan" in known_face_names:
-                                current_face_names.append("Ivan")
-                                current_face_confidences.append(90)
-                            else:
-                                current_face_names.append("Desconocido")
-                                current_face_confidences.append(0)
+                            # Crear o actualizar tracking
+                            track_id = f"{name}_track"
+                            face_tracking[track_id] = {
+                                'location': face_loc,
+                                'name': name,
+                                'confidence': confidence,
+                                'frames_left': FACE_MEMORY_FRAMES
+                            }
+                            print(f"Reconocido: {name} con confianza {confidence:.1f}%")
                         else:
-                            current_face_names.append("Desconocido")
-                            current_face_confidences.append(0)
+                            print(f"Rostro detectado pero no reconocido como {name}: confianza {confidence:.1f}% < umbral 40%")
                     except Exception as e:
-                        current_face_names.append("Desconocido")
-                        current_face_confidences.append(0)
-                else:
-                    current_face_names.append("Desconocido")
-                    current_face_confidences.append(0)
+                        print(f"Error al procesar rostro con Haar: {e}")
+                
+            # Método 2: Intentar también con MTCNN si Haar no encontró rostros conocidos
+            if len(current_face_names) == 0 and face_recognizer is not None:
+                try:
+                    boxes, probs = face_recognizer.detect_faces(small_frame)
+                    
+                    if boxes is not None and len(boxes) > 0:
+                        print("MTCNN detectó rostros")
+                        
+                        # Convertir detecciones MTCNN
+                        for i, box in enumerate(boxes):
+                            if isinstance(box, (list, np.ndarray)) and len(box) == 4:
+                                try:
+                                    box_array = np.array(box)
+                                    x1, y1, x2, y2 = map(int, box_array.astype(int))
+                                    w, h = x2 - x1, y2 - y1
+                                    
+                                    # Extraer región del rostro
+                                    if y1 < 0: y1 = 0
+                                    if x1 < 0: x1 = 0
+                                    
+                                    face_region = small_frame[y1:y2, x1:x2]
+                                    if face_region.size == 0:
+                                        print("Región de rostro MTCNN vacía, omitiendo")
+                                        continue
+                                        
+                                    # Usar FaceNet para comparar con rostros conocidos
+                                    name, confidence = face_recognizer.identify_face(face_region)
+                                    
+                                    # Solo agregar rostros conocidos con confianza suficiente
+                                    if name != "Desconocido" and confidence >= 40:
+                                        face_loc = (x1, y1, w, h)
+                                        current_face_locations.append(face_loc)
+                                        current_face_names.append(name)
+                                        current_face_confidences.append(confidence)
+                                        
+                                        # Crear o actualizar tracking
+                                        track_id = f"{name}_track"
+                                        face_tracking[track_id] = {
+                                            'location': face_loc,
+                                            'name': name,
+                                            'confidence': confidence,
+                                            'frames_left': FACE_MEMORY_FRAMES
+                                        }
+                                        print(f"Reconocido con MTCNN: {name} con confianza {confidence:.1f}%")
+                                    else:
+                                        print(f"Rostro MTCNN detectado pero no reconocido como {name}: confianza {confidence:.1f}% < umbral 40%")
+                                except Exception as e:
+                                    print(f"Error al procesar box MTCNN: {e}")
+                except Exception as e:
+                    print(f"Error con MTCNN: {e}")
+                    
+        except Exception as e:
+            print(f"Error en detección: {e}")
+            traceback.print_exc()
+    
+    # Decrementar contador para todos los trackings
+    keys_to_remove = []
+    for track_id in face_tracking:
+        face_tracking[track_id]['frames_left'] -= 1
         
-        # Sistema de tracking para Ivan
-        for i, (x, y, w, h) in enumerate(current_face_locations):
-            if i < len(current_face_names) and current_face_names[i] == "Ivan":
-                # Hemos detectado a Ivan, actualizar posición
-                ivan_tracking_id = "ivan_track"
-                face_tracking[ivan_tracking_id] = {
-                    'location': (x, y, w, h),
-                    'name': "Ivan",
-                    'confidence': current_face_confidences[i] if i < len(current_face_confidences) else 90,
-                    'frames_left': FACE_MEMORY_FRAMES
-                }
-                break
+        # Marcar para eliminar si expiró
+        if face_tracking[track_id]['frames_left'] <= 0:
+            keys_to_remove.append(track_id)
     
-    # Decrementar contador si estamos haciendo seguimiento
-    if ivan_tracking_id in face_tracking:
-        if should_process:
-            face_tracking[ivan_tracking_id]['frames_left'] -= 1
-            
-        # Eliminar si expiró
-        if face_tracking[ivan_tracking_id]['frames_left'] <= 0:
-            del face_tracking[ivan_tracking_id]
-            ivan_tracking_id = None
+    # Eliminar tracks expirados
+    for key in keys_to_remove:
+        del face_tracking[key]
+        if key == tracking_id:
+            tracking_id = None
     
-    # Dibujar Ivan si está siendo seguido
+    # Dibujar todos los rostros en seguimiento
     processed_frame = frame.copy()
     
-    if ivan_tracking_id in face_tracking:
-        face_data = face_tracking[ivan_tracking_id]
-        
-        # Extraer datos
-        x, y, w, h = face_data['location']
-        name = face_data['name']
-        confidence = face_data['confidence']
-        
-        # Ajustar coordenadas al tamaño original
-        x_orig = int(x / FRAME_RESIZE_FACTOR)
-        y_orig = int(y / FRAME_RESIZE_FACTOR)
-        w_orig = int(w / FRAME_RESIZE_FACTOR)
-        h_orig = int(h / FRAME_RESIZE_FACTOR)
-        
-        # Color verde para Ivan
-        color = (0, 255, 0)
-        # Texto con nombre y confianza
-        label = f"{name} {int(confidence)}%"
-        
-        # Dibujar el recuadro del rostro
-        cv2.rectangle(processed_frame, (x_orig, y_orig), (x_orig + w_orig, y_orig + h_orig), color, 2)
-        
-        # Dibujar un fondo para el texto
-        text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.8, 1)[0]
-        cv2.rectangle(processed_frame, 
-                     (x_orig, y_orig - 35), 
-                     (x_orig + text_size[0] + 10, y_orig),
-                     (0, 0, 0), -1)
-        
-        # Dibujar el nombre en AZUL
-        cv2.putText(processed_frame, 
-                   label, 
-                   (x_orig + 6, y_orig - 6), 
-                   cv2.FONT_HERSHEY_DUPLEX, 
-                   0.8,
-                   (255, 0, 0),  # Azul en BGR
-                   1)
+    # Depuración: verificar cuántos rostros estamos siguiendo
+    print(f"Dibujando {len(face_tracking)} rostros en seguimiento")
     
-    # Mostrar info adicional
-    cv2.putText(processed_frame, f"Personas conocidas: {len(known_face_names)}", 
-               (10, processed_frame.shape[0] - 20), 
-               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    for track_id, face_data in face_tracking.items():
+        try:
+            # Extraer datos
+            x, y, w, h = face_data['location']
+            name = face_data['name']
+            confidence = face_data['confidence']
+            
+            # Ajustar coordenadas al tamaño original
+            x_orig = int(x / FRAME_RESIZE_FACTOR)
+            y_orig = int(y / FRAME_RESIZE_FACTOR)
+            w_orig = int(w / FRAME_RESIZE_FACTOR)
+            h_orig = int(h / FRAME_RESIZE_FACTOR)
+            
+            # Color verde para rostros conocidos
+            color = (0, 255, 0)  # Verde en BGR
+            # Texto con nombre y confianza
+            label = f"{name} {int(confidence)}%"
+            
+            print(f"Dibujando recuadro para {name} en ({x_orig},{y_orig},{w_orig},{h_orig})")
+            
+            # Dibujar el recuadro del rostro (más grueso para mayor visibilidad)
+            cv2.rectangle(processed_frame, (x_orig, y_orig), (x_orig + w_orig, y_orig + h_orig), color, 3)
+            
+            # Dibujar un fondo más grande para el texto
+            text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.8, 1)[0]
+            cv2.rectangle(processed_frame, 
+                        (x_orig, y_orig - 35), 
+                        (x_orig + text_size[0] + 10, y_orig),
+                        (0, 0, 0), -1)
+            
+            # Dibujar el nombre en AZUL (más grande y grueso)
+            cv2.putText(processed_frame, 
+                    label, 
+                    (x_orig + 6, y_orig - 6), 
+                    cv2.FONT_HERSHEY_DUPLEX, 
+                    0.8,
+                    (255, 0, 0),  # Azul en BGR
+                    2)  # Línea más gruesa
+            
+            # Añadir un recuadro adicional para mayor visibilidad
+            cv2.rectangle(processed_frame, 
+                        (x_orig-2, y_orig-2), 
+                        (x_orig + w_orig+2, y_orig + h_orig+2), 
+                        (255, 255, 255), 1)  # Borde blanco exterior
+        except Exception as e:
+            print(f"Error al dibujar rostro: {e}")
     
     return processed_frame
 
@@ -265,6 +347,10 @@ def capture_frames():
     error_count = 0
     max_errors = 5
     
+    # Inicializar contador de frames para depuración
+    total_frames = 0
+    frames_with_faces = 0
+    
     while is_camera_running:
         try:
             if camera is None or not camera.isOpened():
@@ -293,7 +379,31 @@ def capture_frames():
             
             # Procesar frame
             try:
+                total_frames += 1
+                
+                # Imprimir estadísticas cada 100 frames
+                if total_frames % 100 == 0:
+                    if frames_with_faces > 0:
+                        print(f"ESTADÍSTICAS: {frames_with_faces}/{total_frames} frames han tenido rostros detectados ({frames_with_faces/total_frames*100:.1f}%)")
+                    else:
+                        print(f"ESTADÍSTICAS: Ningún rostro detectado en {total_frames} frames")
+                    
+                # Guardar número de rostros antes del procesamiento
+                faces_before = len(face_tracking) if face_tracking else 0
+                
                 processed_frame = detect_and_recognize_faces(frame)
+                
+                # Guardar número de rostros después del procesamiento
+                faces_after = len(face_tracking) if face_tracking else 0
+                
+                # Actualizar contador si se detectaron rostros
+                if faces_after > 0:
+                    frames_with_faces += 1
+                    
+                # Imprimir info sobre cambios en los rostros detectados
+                if faces_before != faces_after:
+                    print(f"Cambio en rostros detectados: {faces_before} -> {faces_after}")
+                
             except Exception as e:
                 print(f"Error al procesar frame: {e}")
                 processed_frame = frame.copy()  # Usar frame original si hay error
@@ -417,14 +527,16 @@ def stop_camera():
     
     return jsonify({"status": "Cámara detenida correctamente"})
 
-@app.route('/status', methods=['GET'])
+@app.route('/status')
 def status():
-    """Obtener estado actual de la cámara"""
-    global is_camera_running
+    # Retorna el estado actual de la cámara y la información del modelo
+    global camera, face_recognizer
+    known_faces_count = len(face_recognizer.known_face_names) if face_recognizer else 0
     
     return jsonify({
-        "camera_running": is_camera_running,
-        "known_faces": len(known_face_names)
+        'camera_running': camera is not None and camera.isOpened(),
+        'error_count': camera.error_count if camera and hasattr(camera, 'error_count') else 0,
+        'known_faces': known_faces_count
     })
 
 @app.route('/reset', methods=['POST'])
@@ -447,6 +559,30 @@ def reset():
         output_frame = None
     
     return jsonify({"status": "Sistema reseteado correctamente"})
+
+@app.route('/update_model', methods=['POST'])
+def update_model():
+    global camera, face_recognizer
+    
+    # Verificar si la cámara está activa
+    if camera is not None and camera.isOpened():
+        return jsonify({'status': 'Error: Detenga la cámara antes de actualizar el modelo'}), 400
+    
+    try:
+        # Reiniciar el reconocedor facial
+        face_recognizer = None
+        
+        # Cargar nuevamente las caras conocidas
+        load_faces()
+        
+        known_faces_count = len(face_recognizer.known_face_names) if face_recognizer else 0
+        return jsonify({
+            'status': 'Modelo actualizado exitosamente',
+            'known_faces': known_faces_count
+        })
+    except Exception as e:
+        app.logger.error(f"Error al actualizar el modelo: {str(e)}")
+        return jsonify({'status': f'Error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # Para producción, establecer threaded=True para mejor rendimiento con múltiples clientes
