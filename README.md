@@ -11,6 +11,9 @@ Este proyecto es una aplicación web para reconocimiento facial en tiempo real u
 - Motor de reconocimiento facial basado en embeddings faciales
 - Detector MTCNN para localización precisa de rostros
 - Modelo InceptionResnetV1 para extracción de características faciales
+- Reconocimiento selectivo: solo muestra rostros conocidos, ignorando a desconocidos
+- Métodos redundantes de detección facial (Haar Cascade + MTCNN) para mayor robustez
+- Sistema de seguimiento temporal para mantener la continuidad de detecciones
 
 ## Requisitos
 
@@ -108,7 +111,16 @@ http://localhost:5000
 
 - Modifique `FACE_MEMORY_FRAMES` en `app.py` para ajustar cuánto tiempo permanecen visibles los recuadros de rostros
 - Ajuste `FRAME_RESIZE_FACTOR` para equilibrar entre rendimiento y precisión
-- Cambie `SIMILARITY_THRESHOLD` para hacer el reconocimiento más o menos estricto
+- Modifique el umbral de reconocimiento en `face_recognition_model.py` (variable `recognition_threshold`) y en `app.py` para ajustar la sensibilidad del reconocimiento
+- Cambie `PROCESS_EVERY_N_FRAMES` para definir la frecuencia de procesamiento de frames (valores más altos mejoran rendimiento)
+
+## Actualizaciones Recientes
+
+- **Reconocimiento Selectivo**: El sistema ahora solo marca y muestra rostros conocidos, ignorando a personas desconocidas
+- **Mejoras de Rendimiento**: Procesamiento optimizado de frames para reducir la carga en CPU
+- **Mayor Robustez**: Implementación de métodos redundantes de detección facial para aumentar la fiabilidad
+- **Interfaz Mejorada**: Incorporación de mecanismos de reinicio y recuperación de errores
+- **Visualización Optimizada**: Mejoras en la visualización de los cuadros de detección y nombres para mayor claridad
 
 ## Licencia
 
