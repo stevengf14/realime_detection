@@ -3,3 +3,5 @@ opencv-python
 ultralytics
 face-recognition
 numpy
+flask
+Pillow

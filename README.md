@@ -1,75 +1,99 @@
-# Face Recognition using YOLOv8
+# Sistema de Reconocimiento Facial
 
-## Overview
-This project implements face recognition using YOLOv8 for real-time detection and identification. YOLOv8 is used for face detection, while a face recognition model is applied to match detected faces against a known database.
+Este proyecto es una aplicación web para reconocimiento facial en tiempo real usando Flask, OpenCV y face_recognition.
 
-## Features
-- Real-time face detection using YOLOv8.
-- Face recognition using deep learning.
-- Works with live video streams or image inputs.
+## Características
 
-## Installation
+- Detección y reconocimiento de rostros en tiempo real
+- Interfaz web responsive y amigable
+- Seguimiento persistente de rostros detectados
+- Marcado de rostros conocidos con nombres y porcentajes de confianza
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/face-recognition-yolo8.git
-   cd face-recognition-yolo8
-   ```
+## Requisitos
 
-2. **Create and activate a virtual environment (optional but recommended)**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows use: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Download YOLOv8 model weights**
-   ```bash
-   wget https://github.com/ultralytics/assets/releases/download/v8/yolov8n.pt
-   ```
-
-## Usage
-
-### Running Face Detection and Recognition
-```bash
-python detect.py --source 0 --model yolov8n.pt --face_db faces/
-```
-- `--source`: Set input source (0 for webcam, path for image/video file).
-- `--model`: Path to the YOLOv8 model weights.
-- `--face_db`: Directory containing known faces for recognition.
-
-### Training Custom Face Recognition Model
-If you want to fine-tune the recognition model, prepare labeled images and run:
-```bash
-python train.py --data face_dataset/ --epochs 50
-```
-
-## Project Structure
-```
-face-recognition-yolo8/
-│── models/               # Pretrained and custom models
-│── data/                 # Sample images/videos
-│── faces/                # Known faces database
-│── detect.py             # Face detection script
-│── train.py              # Training script for face recognition
-│── requirements.txt      # Required Python packages
-│── README.md             # Project documentation
-```
-
-## Dependencies
 - Python 3.8+
-- Ultralytics YOLOv8
-- OpenCV
-- Torch & Torchvision
-- Face recognition libraries (e.g., `face_recognition`)
+- Una cámara web
+- Las bibliotecas listadas en `requirements.txt`
 
-## References
-- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
-- [Face Recognition Python](https://github.com/ageitgey/face_recognition)
+## Instalación
 
-## License
-This project is licensed under the MIT License.
+1. Clonar este repositorio:
+```
+git clone <url-del-repositorio>
+cd <nombre-del-repositorio>
+```
+
+2. Crear un entorno virtual (recomendado):
+```
+python -m venv venv
+```
+
+3. Activar el entorno virtual:
+   - En Windows:
+   ```
+   venv\Scripts\activate
+   ```
+   - En macOS/Linux:
+   ```
+   source venv/bin/activate
+   ```
+
+4. Instalar las dependencias:
+```
+pip install -r requirements.txt
+```
+
+**Nota para usuarios de Windows**: La instalación de `dlib` puede ser complicada. Si encuentra problemas, considere descargar un archivo wheel precompilado de [este repositorio](https://github.com/jloh02/dlib/releases).
+
+## Configuración
+
+1. Crear una carpeta llamada `people` en el directorio raíz del proyecto:
+```
+mkdir people
+```
+
+2. Añadir imágenes de rostros para reconocimiento:
+   - Opción 1: Colocar imágenes directamente en la carpeta `people`. El nombre del archivo (sin extensión) se utilizará como identificador de la persona.
+   - Opción 2: Crear subcarpetas con el nombre de cada persona dentro de `people` y colocar sus fotos dentro.
+
+Las imágenes deben ser claras, bien iluminadas y mostrar el rostro frontal. Formatos soportados: JPG, JPEG, y PNG.
+
+## Uso
+
+1. Iniciar la aplicación:
+```
+python app.py
+```
+
+2. Abrir un navegador web y acceder a:
+```
+http://localhost:5000
+```
+
+3. En la interfaz web:
+   - Haga clic en "Iniciar Cámara" para comenzar el reconocimiento
+   - Su rostro será detectado y reconocido si está en la base de datos
+   - Se mostrará un recuadro verde con su nombre y el porcentaje de confianza
+   - Haga clic en "Detener Cámara" cuando termine
+
+## Estructura del Proyecto
+
+- `app.py`: Aplicación principal de Flask
+- `templates/`: Plantillas HTML para la interfaz web
+- `people/`: Carpeta donde se almacenan las imágenes de referencia
+- `realTimeDetection.py`: Script original de reconocimiento facial (independiente de la versión web)
+
+## Solución de Problemas
+
+- **Error al acceder a la cámara**: Asegúrese de que ninguna otra aplicación esté utilizando la cámara
+- **Rostros no reconocidos**: Intente con imágenes de mejor calidad o en diferentes condiciones de iluminación
+- **Error con imágenes**: Si algunas imágenes no se cargan correctamente, intente convertirlas a formato JPG
+
+## Personalización
+
+- Modifique `FACE_MEMORY_FRAMES` en `app.py` para ajustar cuánto tiempo permanecen visibles los recuadros de rostros
+- Ajuste `FRAME_RESIZE_FACTOR` para equilibrar entre rendimiento y precisión
+
+## Licencia
+
+Este proyecto está licenciado bajo los términos de la licencia MIT.
