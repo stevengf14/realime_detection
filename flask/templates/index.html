@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detección en tiempo real</title>
+</head>
+<body style="background-color:#72b7c2;">
+    <h1>Detección en tiempo real con OpenCV y Flask</h1>
+
+    <button onclick="startCapture()">Iniciar Captura</button>
+    <button onclick="stopCapture()">Detener Captura</button>
+
+    <br><br>
+    <div id="video_container" style="display: none;">
+        <img id="video_feed" src="{{ url_for('video_feed') }}" width="640" height="480">
+    </div>
+
+    <div id="video_container_gif" style="display: block;">
+        <img src="{{ url_for('static', filename='Dancing-Jesus-resize.gif') }}" width="200">
+    </div>
+    <script>
+        let isCapturing = false;
+        function startCapture() {
+            fetch('/start')
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    isCapturing = true;
+                    toggleVideo();
+                });
+        }
+
+        function stopCapture() {
+            fetch('/stop')
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    isCapturing = false;
+                    toggleVideo();
+                });
+        }
+
+       function toggleVideo() {
+            const videoContainer = document.getElementById("video_container");
+            const videoContainerGif = document.getElementById("video_container_gif");
+            videoContainer.style.display = isCapturing ? "block" : "none";
+            videoContainerGif.style.display = isCapturing ? "none": "block";
+        }
+    </script>
+</body>
+</html>
