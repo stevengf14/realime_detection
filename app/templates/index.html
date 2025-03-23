@@ -169,7 +169,7 @@
                     </div>
                     <div class="card-body p-0">
                         <div class="video-container" id="videoContainer">
-                            <img id="videoFeed" class="video-feed d-none" src="{{ url_for('video_feed') }}" alt="Video Feed">
+                            <img id="videoFeed" class="video-feed d-none" src="{{ url_for('camera.video_feed') }}" alt="Video Feed">
                             <div class="loading-overlay" id="loadingOverlay">
                                 <div class="text-center">
                                     <div class="spinner-border text-light loading-spinner" role="status">
@@ -248,51 +248,46 @@
                         </div>
                         
                         <h5 class="card-title mt-4">Motor de Reconocimiento</h5>
-                        <p>Este sistema utiliza <strong>FaceNet + PyTorch</strong> con redes neuronales profundas para reconocimiento facial de alta precisión.</p>
+                        <p>Este sistema utiliza tecnología avanzada de inteligencia artificial:</p>
                         <ul>
-                            <li>Detección de rostros con MTCNN</li>
-                            <li>Embeddings faciales con InceptionResnetV1</li>
-                            <li>Comparación mediante similitud de coseno</li>
+                            <li><strong>FaceNet:</strong> Red neuronal para codificación de rostros</li>
+                            <li><strong>MTCNN:</strong> Detección precisa de rostros en múltiples condiciones</li>
                         </ul>
-                        
-                        <div class="alert alert-success mt-3" id="modelInfo">
-                            <i class="fas fa-check-circle me-2"></i>Cargando información del modelo...
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Características -->
+        <!-- Características del sistema -->
         <div class="row mt-4" id="about">
             <div class="col-12">
                 <h3 class="text-center mb-4">Características del Sistema</h3>
             </div>
             <div class="col-md-4">
                 <div class="card feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-bolt"></i>
+                    <div class="card-body">
+                        <i class="fas fa-bolt feature-icon"></i>
+                        <h5 class="card-title">Reconocimiento en Tiempo Real</h5>
+                        <p class="card-text">Detección y reconocimiento instantáneo de rostros con alta precisión.</p>
                     </div>
-                    <h5>Reconocimiento en Tiempo Real</h5>
-                    <p>Detección y reconocimiento de rostros instantáneo con seguimiento fluido.</p>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-lock"></i>
+                    <div class="card-body">
+                        <i class="fas fa-shield-alt feature-icon"></i>
+                        <h5 class="card-title">Seguridad Mejorada</h5>
+                        <p class="card-text">Ideal para control de acceso y verificación de identidad.</p>
                     </div>
-                    <h5>Seguridad</h5>
-                    <p>Implementación local sin enviar datos a servidores externos.</p>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="card feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-cog"></i>
+                    <div class="card-body">
+                        <i class="fas fa-cogs feature-icon"></i>
+                        <h5 class="card-title">Fácil Configuración</h5>
+                        <p class="card-text">Añada nuevos rostros simplemente agregando imágenes a la carpeta.</p>
                     </div>
-                    <h5>Personalizable</h5>
-                    <p>Fácil de adaptar añadiendo nuevas caras al sistema.</p>
                 </div>
             </div>
         </div>
@@ -320,40 +315,51 @@
             const loadingOverlay = document.getElementById('loadingOverlay');
             const errorAlert = document.getElementById('errorAlert');
             const errorMessage = document.getElementById('errorMessage');
-            const modelInfo = document.getElementById('modelInfo');
             
             let cameraActive = false;
             let selectedCameraId = "0"; // Cámara por defecto
             let statusCheckInterval = null;
             
-            // Función para verificar el estado del servidor periódicamente
-            function startStatusCheck() {
-                if (statusCheckInterval) clearInterval(statusCheckInterval);
-                
-                statusCheckInterval = setInterval(async () => {
-                    try {
-                        const response = await fetch('/status');
-                        if (!response.ok) throw new Error('Error en la petición');
-                        
-                        const data = await response.json();
-                        
-                        // Si el servidor dice que la cámara no está activa pero la interfaz dice que sí
-                        if (!data.camera_running && cameraActive) {
-                            console.log('Inconsistencia detectada: La cámara no está activa en el servidor');
-                            updateStatus(false, "Cámara desconectada");
-                            showError("Se perdió la conexión con la cámara. Intente reiniciar.");
-                        }
-                    } catch (error) {
-                        console.error('Error al verificar estado:', error);
-                    }
-                }, 5000); // Verificar cada 5 segundos
+            // Función para actualizar la interfaz según el estado de la cámara
+            function updateUI(active) {
+                if (active) {
+                    videoFeed.classList.remove('d-none');
+                    loadingOverlay.style.display = 'none';
+                    statusIndicator.classList.add('status-active');
+                    statusIndicator.classList.remove('status-inactive');
+                    statusText.textContent = 'Cámara activa';
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                } else {
+                    videoFeed.classList.add('d-none');
+                    loadingOverlay.style.display = 'flex';
+                    statusIndicator.classList.add('status-inactive');
+                    statusIndicator.classList.remove('status-active');
+                    statusText.textContent = 'Cámara detenida';
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                }
             }
             
-            function stopStatusCheck() {
-                if (statusCheckInterval) {
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
-                }
+            // Verificar el estado inicial
+            function checkStatus() {
+                fetch('/camera/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        cameraActive = data.camera_running;
+                        updateUI(cameraActive);
+                        
+                        // Actualizar información adicional
+                        infoText.textContent = `Rostros conocidos: ${data.known_faces}`;
+                    })
+                    .catch(error => {
+                        console.error('Error al verificar estado:', error);
+                    });
+            }
+            
+            // Iniciar verificación periódica del estado
+            function startStatusCheck() {
+                statusCheckInterval = setInterval(checkStatus, 5000);
             }
             
             // Escuchar clics en opciones de cámara
@@ -365,31 +371,6 @@
                     console.log(`Cámara seleccionada: ${selectedCameraId}`);
                 });
             });
-            
-            // Función para actualizar el estado visual
-            function updateStatus(active, message) {
-                cameraActive = active;
-                
-                if (active) {
-                    statusIndicator.classList.remove('status-inactive');
-                    statusIndicator.classList.add('status-active');
-                    videoFeed.classList.remove('d-none');
-                    loadingOverlay.classList.add('d-none');
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
-                    startStatusCheck();
-                } else {
-                    statusIndicator.classList.remove('status-active');
-                    statusIndicator.classList.add('status-inactive');
-                    videoFeed.classList.add('d-none');
-                    loadingOverlay.classList.remove('d-none');
-                    startButton.disabled = false;
-                    stopButton.disabled = true;
-                    stopStatusCheck();
-                }
-                
-                statusText.textContent = message;
-            }
             
             // Función para mostrar errores
             function showError(message) {
@@ -416,7 +397,7 @@
                 };
                 
                 try {
-                    const response = await fetch('/start_camera', {
+                    const response = await fetch('/camera/start', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -425,23 +406,25 @@
                     });
                     
                     const responseData = await response.json();
-                    console.log(responseData);
+                    console.log('Cámara iniciada:', responseData);
                     
                     if (response.ok) {
-                        updateStatus(true, "Cámara activa");
+                        updateUI(true);
                         infoText.textContent = "Detectando rostros...";
                         
-                        // Forzar recarga del stream con un timestamp único
-                        const timestamp = new Date().getTime();
-                        videoFeed.src = `{{ url_for('video_feed') }}?t=${timestamp}`;
+                        // Actualizar la fuente del video después de iniciar la cámara
+                        videoFeed.src = '/camera/video_feed?' + new Date().getTime();
+                        
+                        // Verificar el estado después de un breve retraso
+                        setTimeout(checkStatus, 1000);
                     } else {
-                        updateStatus(false, "Error al iniciar cámara");
+                        updateUI(false);
                         infoText.textContent = "";
                         showError(`Error: ${responseData.status}`);
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    updateStatus(false, "Error de comunicación");
+                    updateUI(false);
                     infoText.textContent = "";
                     showError("Error al comunicarse con el servidor. Verifique la consola para más detalles.");
                 }
@@ -452,7 +435,7 @@
                 infoText.textContent = "Deteniendo cámara...";
                 
                 try {
-                    const response = await fetch('/stop_camera', {
+                    const response = await fetch('/camera/stop', {
                         method: 'POST'
                     });
                     
@@ -460,7 +443,7 @@
                     console.log(data);
                     
                     if (response.ok) {
-                        updateStatus(false, "Cámara detenida");
+                        updateUI(false);
                         infoText.textContent = "";
                         videoFeed.src = ""; // Limpiar el src para detener la carga
                     } else {
@@ -478,7 +461,7 @@
                 errorAlert.classList.add('d-none');
                 
                 try {
-                    const response = await fetch('/reset', {
+                    const response = await fetch('/camera/reset', {
                         method: 'POST'
                     });
                     
@@ -486,7 +469,7 @@
                     console.log(data);
                     
                     // Actualizar estado independientemente de la respuesta
-                    updateStatus(false, "Sistema reiniciado");
+                    updateUI(false);
                     infoText.textContent = "";
                     videoFeed.src = ""; // Limpiar el src para detener la carga
                     
@@ -507,7 +490,7 @@
                 updateModelButton.disabled = true;
                 
                 try {
-                    const response = await fetch('/update_model', {
+                    const response = await fetch('/recognition/update_model', {
                         method: 'POST'
                     });
                     
@@ -515,92 +498,37 @@
                     console.log(data);
                     
                     if (response.ok) {
-                        modelInfo.innerHTML = `
+                        infoText.textContent = `Rostros conocidos: ${data.known_faces}`;
+                        // Mostrar mensaje de éxito
+                        const successAlert = document.createElement('div');
+                        successAlert.className = 'alert alert-success mt-3';
+                        successAlert.innerHTML = `
                             <i class="fas fa-check-circle me-2"></i>
-                            <strong>Modelo cargado:</strong> ${data.known_faces} rostros registrados
+                            <strong>Modelo actualizado:</strong> ${data.known_faces} rostros registrados
+                            <button type="button" class="btn-close float-end" data-bs-dismiss="alert" aria-label="Close"></button>
                         `;
-                        modelInfo.classList.remove('alert-warning');
-                        modelInfo.classList.add('alert-success');
+                        
+                        // Insertar antes de la alerta de error
+                        errorAlert.parentNode.insertBefore(successAlert, errorAlert);
+                        
+                        // Eliminar después de 5 segundos
+                        setTimeout(() => {
+                            successAlert.remove();
+                        }, 5000);
                     } else {
                         showError(`Error: ${data.status}`);
-                        modelInfo.innerHTML = `
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Error al cargar modelo:</strong> ${data.status}
-                        `;
-                        modelInfo.classList.remove('alert-success');
-                        modelInfo.classList.add('alert-warning');
                     }
                 } catch (error) {
                     console.error('Error al actualizar modelo:', error);
                     showError("Error al comunicarse con el servidor");
-                    modelInfo.innerHTML = `
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Error:</strong> No se pudo actualizar el modelo
-                    `;
-                    modelInfo.classList.remove('alert-success');
-                    modelInfo.classList.add('alert-warning');
                 } finally {
                     updateModelButton.disabled = false;
-                    infoText.textContent = "";
                 }
             });
             
-            // Obtener información inicial del modelo
-            async function getModelInfo() {
-                try {
-                    const response = await fetch('/status');
-                    if (!response.ok) throw new Error('Error en la petición');
-                    
-                    const data = await response.json();
-                    
-                    if (data.known_faces > 0) {
-                        modelInfo.innerHTML = `
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Modelo cargado:</strong> ${data.known_faces} rostros registrados
-                        `;
-                        modelInfo.classList.remove('alert-warning');
-                        modelInfo.classList.add('alert-success');
-                    } else {
-                        modelInfo.innerHTML = `
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Aviso:</strong> No hay rostros registrados en el modelo
-                        `;
-                        modelInfo.classList.remove('alert-success');
-                        modelInfo.classList.add('alert-warning');
-                    }
-                } catch (error) {
-                    console.error('Error al obtener información del modelo:', error);
-                    modelInfo.innerHTML = `
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Error:</strong> No se pudo obtener información del modelo
-                    `;
-                    modelInfo.classList.remove('alert-success');
-                    modelInfo.classList.add('alert-warning');
-                }
-            }
-            
-            // Inicializar estado
-            updateStatus(false, "Cámara detenida");
-            
-            // Verificar estado inicial y obtener info del modelo
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.camera_running) {
-                        // La cámara está activa en el servidor pero no en la interfaz
-                        console.log('La cámara ya está activa en el servidor. Actualizando interfaz.');
-                        updateStatus(true, "Cámara activa");
-                        infoText.textContent = "Detectando rostros...";
-                        videoFeed.src = "{{ url_for('video_feed') }}?" + new Date().getTime();
-                    }
-                    
-                    // Actualizar info del modelo
-                    getModelInfo();
-                })
-                .catch(error => {
-                    console.error('Error al verificar estado inicial:', error);
-                    getModelInfo();
-                });
+            // Iniciar verificación del estado
+            checkStatus();
+            startStatusCheck();
         });
     </script>
 </body>
