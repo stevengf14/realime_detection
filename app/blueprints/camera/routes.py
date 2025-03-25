@@ -42,9 +42,3 @@ def video_feed():
     
     return Response(camera_instance.generate_frames(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
-
-@camera_bp.route('/status')
-def status():
-    """Retorna el estado actual de la cámara y la información del modelo"""
-    status_data = camera_instance.get_status()
-    return jsonify(status_data) 
