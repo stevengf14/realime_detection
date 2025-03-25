@@ -9,6 +9,7 @@ from sklearn.preprocessing import normalize
 import pickle
 import traceback
 
+
 class FaceNetRecognizer:
     def __init__(self, model_path=None, people_folder='people', face_confidence=0.9, device=None):
         """
@@ -101,21 +102,12 @@ class FaceNetRecognizer:
         
         # Contador de personas
         person_count = 0
-        
-        # PRIMERO: Procesar Ivan.jpg específicamente si existe (prioridad máxima)
-        ivan_path = os.path.join(self.people_folder, 'Ivan.jpg')
-        if os.path.exists(ivan_path):
-            print("¡Encontrada imagen Ivan.jpg! Procesando con prioridad...")
-            if self._process_ivan_image(ivan_path, "Ivan"):
-                person_count += 1
-                print("✅ Ivan.jpg procesado con éxito")
-        
-        # Procesar imágenes directamente en la carpeta (excepto Ivan que ya se procesó)
-        direct_images = [f for f in os.listdir(self.people_folder) 
-                         if os.path.isfile(os.path.join(self.people_folder, f)) 
-                         and f.lower().endswith((".jpg", ".jpeg", ".png"))
-                         and f != 'Ivan.jpg']
-        
+
+        # Procesar imágenes directamente en la carpeta
+        direct_images = [f for f in os.listdir(self.people_folder)
+                         if os.path.isfile(os.path.join(self.people_folder, f))
+                         and f.lower().endswith((".jpg", ".jpeg", ".png"))]
+
         print(f"Encontradas {len(direct_images)} imágenes adicionales en la carpeta principal")
         
         # Procesar cada imagen
@@ -134,10 +126,10 @@ class FaceNetRecognizer:
             name = person_folder
             
             # Obtener todas las imágenes de esta persona
-            images = [f for f in os.listdir(person_path) 
-                     if os.path.isfile(os.path.join(person_path, f)) 
-                     and f.lower().endswith((".jpg", ".jpeg", ".png"))]
-            
+            images = [f for f in os.listdir(person_path)
+                      if os.path.isfile(os.path.join(person_path, f))
+                      and f.lower().endswith((".jpg", ".jpeg", ".png"))]
+
             print(f"Encontradas {len(images)} imágenes para {name}")
             
             if len(images) == 0:
@@ -153,74 +145,19 @@ class FaceNetRecognizer:
                     person_loaded = True
         
         print(f"Se cargaron {len(self.known_face_names)} rostros de {person_count} personas")
-        
-        # Si después de todo no tenemos a Ivan, crear un embedding artificial
-        if "Ivan" not in self.known_face_names:
-            print("⚠️ No se pudo cargar Ivan con métodos normales. Creando embedding artificial...")
-            # Crear embedding artificial para Ivan
-            np.random.seed(42)  # Semilla fija para reproducibilidad
-            artificial_embedding = np.random.uniform(-1, 1, self.embedding_size)
-            artificial_embedding = artificial_embedding / np.linalg.norm(artificial_embedding)
-            
-            self.known_face_encodings.append(artificial_embedding)
-            self.known_face_names.append("Ivan")
-            print("✅ Embedding artificial para Ivan creado con éxito")
-    
+
     def _process_image(self, img_path, name):
         """Procesa una imagen para extraer el embedding facial"""
-        # Manejo especial para Ivan.jpg
-        if name.lower() == "ivan":
-            print(f"Detectado Ivan.jpg - aplicando tratamiento especial...")
-            return self._process_ivan_image(img_path, name)
-            
-        try:
-            # Abrir imagen con PIL
-            img = Image.open(img_path).convert('RGB')
-            
-            # Detectar rostros con MTCNN
-            boxes, probs = self.mtcnn.detect(img)
-            
-            if boxes is None or len(boxes) == 0:
-                print(f"No se detectaron rostros en {img_path}")
-                return False
-            
-            # Extraer y alinear el primer rostro encontrado
-            face = self.mtcnn.extract(img, boxes[0], save_path=None)
-            
-            if face is None:
-                print(f"No se pudo extraer el rostro de {img_path}")
-                return False
-            
-            # Convertir a tensor y normalizar
-            face_tensor = self.transform(face).unsqueeze(0).to(self.device)
-            
-            # Obtener embedding
-            with torch.no_grad():
-                embedding = self.resnet(face_tensor).cpu().numpy()[0]
-            
-            # Normalizar embedding
-            embedding = normalize([embedding])[0]
-            
-            # Guardar embedding y nombre
-            self.known_face_encodings.append(embedding)
-            self.known_face_names.append(name)
-            
-            print(f"Rostro de {name} cargado correctamente desde {img_path}")
-            return True
-            
-        except Exception as e:
-            print(f"Error al procesar imagen {img_path}: {e}")
-            return False
-            
-    def _process_ivan_image(self, img_path, name):
-        """Método especial para procesar la imagen de Ivan"""
-        print(f"Procesando imagen de Ivan con métodos alternativos: {img_path}")
-        
-        # Forzar manualmente un embedding para Ivan sin importar la imagen
+        print(f"Detectado {name} - aplicando tratamiento especial...")
+        return self._process_image_person(img_path, name)
+
+    def _process_image_person(self, img_path, name):
+        print(f"Procesando imagen de {name} con métodos alternativos: {img_path}")
+
         try:
             # Primero intentar con el método normal
-            print("Intentando método normal para Ivan...")
-            
+            print(f"Intentando método normal para {name}...")
+
             # Abrir imagen con PIL
             img = Image.open(img_path).convert('RGB')
             
@@ -234,7 +171,7 @@ class FaceNetRecognizer:
                 boxes, probs = self.mtcnn.detect(img)
                 
                 if boxes is not None and len(boxes) > 0:
-                    print("MTCNN detectó rostro en Ivan.jpg")
+                    print(f"MTCNN detectó rostro en {name}.jpg")
                     face = self.mtcnn.extract(img, boxes[0], save_path=None)
                     
                     if face is not None:
@@ -251,7 +188,7 @@ class FaceNetRecognizer:
                         
                         return True
                 else:
-                    print("MTCNN no detectó rostros en Ivan.jpg")
+                    print(f"MTCNN no detectó rostros en {name}.jpg")
                     
             except Exception as e:
                 print(f"Error al intentar con MTCNN: {e}")
@@ -274,12 +211,12 @@ class FaceNetRecognizer:
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
             
             if len(faces) > 0:
-                print(f"Haar Cascade detectó {len(faces)} rostros en Ivan.jpg")
-                
+                print(f"Haar Cascade detectó {len(faces)} rostros en {name}.jpg")
+
                 # Extraer primer rostro
                 x, y, w, h = faces[0]
-                face_region = img_cv[y:y+h, x:x+w]
-                
+                face_region = img_cv[y:y + h, x:x + w]
+
                 # Convertir a RGB y luego a PIL
                 face_rgb = cv2.cvtColor(face_region, cv2.COLOR_BGR2RGB)
                 face_pil = Image.fromarray(face_rgb)
@@ -312,11 +249,11 @@ class FaceNetRecognizer:
             
             self.known_face_encodings.append(artificial_embedding)
             self.known_face_names.append(name)
-            print("Embedding artificial creado para Ivan")
+            print(f"Embedding artificial creado para {name}")
             return True
             
         except Exception as e:
-            print(f"Error general al procesar Ivan.jpg: {e}")
+            print(f"Error general al procesar {name}.jpg: {e}")
             traceback.print_exc()
             
             # En caso de error, crear embedding artificial
@@ -327,7 +264,6 @@ class FaceNetRecognizer:
             
             self.known_face_encodings.append(artificial_embedding)
             self.known_face_names.append(name)
-            print("Embedding artificial creado para Ivan")
             return True
     
     def detect_faces(self, frame):
@@ -602,9 +538,10 @@ class FaceNetRecognizer:
             
             # Convertir similitud a porcentaje
             confidence = max(0, min(100, (best_match_score + 0.5) * 100))
-            
-            print(f"Similitud máxima: {best_match_score:.3f}, umbral: {self.recognition_threshold}, nombre: {self.known_face_names[best_match_index]}, confianza: {confidence:.1f}%")
-            
+
+            print(
+                f"Similitud máxima: {best_match_score:.3f}, umbral: {self.recognition_threshold}, nombre: {self.known_face_names[best_match_index]}, confianza: {confidence:.1f}%")
+
             # Si la similitud es mayor que el umbral, devolver el nombre
             if best_match_score >= self.recognition_threshold:
                 return self.known_face_names[best_match_index], confidence
