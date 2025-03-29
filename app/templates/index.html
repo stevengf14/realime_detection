@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Reconocimiento Facial</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: #343a40;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border: none;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 480px;
+            background-color: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .video-feed {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .status-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-active {
+            background-color: #28a745;
+        }
+        .status-inactive {
+            background-color: #dc3545;
+        }
+        .controls-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .info-text {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            z-index: 100;
+        }
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+        }
+        .feature-card {
+            text-align: center;
+            padding: 20px;
+            transition: transform 0.3s;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #007bff;
+        }
+        .footer {
+            background-color: #343a40;
+            color: white;
+            padding: 20px 0;
+            margin-top: 40px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Barra de navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-camera-retro me-2"></i>Sistema de Reconocimiento Facial
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">Inicio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#about">Acerca de</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenido principal -->
+    <div class="main-container mt-4">
+        <!-- Mensaje de bienvenida -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 class="mb-3">Bienvenido al Sistema de Reconocimiento Facial</h3>
+                        <p class="mb-0">Este sistema utiliza visión por computadora para detectar y reconocer rostros en tiempo real.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video y controles -->
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-video me-2"></i>Video en vivo
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="video-container" id="videoContainer">
+                            <img id="videoFeed" class="video-feed d-none" src="{{ url_for('camera.video_feed') }}" alt="Video Feed">
+                            <div class="loading-overlay" id="loadingOverlay">
+                                <div class="text-center">
+                                    <div id="video_spinner" style="display: none; justify-content: center; align-items: center" class="spinner-border text-light loading-spinner" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="mt-3" id="viewText"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="status-container p-2">
+                            <div>
+                                <span class="status-indicator" id="statusIndicator"></span>
+                                <span id="statusText">Cámara detenida</span>
+                            </div>
+                            <div class="info-text">
+                                <i class="fas fa-info-circle me-1"></i><span id="infoText"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="controls-container">
+                            <button id="startButton" class="btn btn-primary">
+                                <i class="fas fa-play me-2"></i>Iniciar Cámara
+                            </button>
+                            <button id="stopButton" class="btn btn-danger" disabled>
+                                <i class="fas fa-stop me-2"></i>Detener Cámara
+                            </button>
+                            <div class="dropdown ms-2">
+                                <button class="btn btn-secondary dropdown-toggle" type="button" id="cameraSourceDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-camera me-2"></i>Fuente
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="cameraSourceDropdown">
+                                    <li><a class="dropdown-item" href="#" data-camera-id="0">Cámara principal</a></li>
+                                    <li><a class="dropdown-item" href="#" data-camera-id="1">Cámara secundaria</a></li>
+                                    <li><a class="dropdown-item" href="#" data-camera-id="dshow">DirectShow (Windows)</a></li>
+                                </ul>
+                            </div>
+                            <button id="resetButton" class="btn btn-warning ms-2">
+                                <i class="fas fa-sync-alt me-2"></i>Reiniciar
+                            </button>
+                            <button id="updateModelButton" class="btn btn-info ms-2">
+                                <i class="fas fa-database me-2"></i>Actualizar Modelo
+                            </button>
+                        </div>
+                        
+                        <!-- Alerta para mostrar errores -->
+                        <div class="alert alert-danger mt-3 d-none" id="errorAlert" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <span id="errorMessage"></span>
+                            <button type="button" class="btn-close float-end" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle me-2"></i>Información
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Instrucciones</h5>
+                        <ol class="card-text">
+                            <li>Haga clic en "Iniciar Cámara" para comenzar la detección</li>
+                            <li>Posiciónese frente a la cámara para ser reconocido</li>
+                            <li>El sistema mostrará su nombre si está registrado</li>
+                            <li>Haga clic en "Detener Cámara" cuando termine</li>
+                        </ol>
+                        
+                        <h5 class="card-title mt-4">Rostros Registrados</h5>
+                        <p>Para añadir nuevas personas al sistema, coloque sus imágenes en la carpeta "people" con el nombre de la persona.</p>
+                        
+                        <div class="alert alert-primary mt-4">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Consejo:</strong> Para mejores resultados, utilice imágenes con buena iluminación y rostro frontal.
+                        </div>
+                        
+                        <h5 class="card-title mt-4">Motor de Reconocimiento</h5>
+                        <p>Este sistema utiliza tecnología avanzada de inteligencia artificial:</p>
+                        <ul>
+                            <li><strong>FaceNet:</strong> Red neuronal para codificación de rostros</li>
+                            <li><strong>MTCNN:</strong> Detección precisa de rostros en múltiples condiciones</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Características del sistema -->
+        <div class="row mt-4" id="about">
+            <div class="col-12">
+                <h3 class="text-center mb-4">Características del Sistema</h3>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-bolt feature-icon"></i>
+                        <h5 class="card-title">Reconocimiento en Tiempo Real</h5>
+                        <p class="card-text">Detección y reconocimiento instantáneo de rostros con alta precisión.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-shield-alt feature-icon"></i>
+                        <h5 class="card-title">Seguridad Mejorada</h5>
+                        <p class="card-text">Ideal para control de acceso y verificación de identidad.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card">
+                    <div class="card-body">
+                        <i class="fas fa-cogs feature-icon"></i>
+                        <h5 class="card-title">Fácil Configuración</h5>
+                        <p class="card-text">Añada nuevos rostros simplemente agregando imágenes a la carpeta.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pie de página -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Sistema de Reconocimiento Facial</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.getElementById('startButton');
+            const stopButton = document.getElementById('stopButton');
+            const resetButton = document.getElementById('resetButton');
+            const updateModelButton = document.getElementById('updateModelButton');
+            const videoFeed = document.getElementById('videoFeed');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const infoText = document.getElementById('infoText');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+
+            const videoSpinner = document.getElementById("video_spinner");
+            const videoText = document.getElementById("viewText");
+            
+            let cameraActive = false;
+            let selectedCameraId = "0"; // Cámara por defecto
+            let statusCheckInterval = null;
+
+            videoText.textContent = "Cámara detenida";
+
+            // Función para actualizar la interfaz según el estado de la cámara
+            function updateUI(active) {
+                if (active) {
+                    videoFeed.classList.remove('d-none');
+                    loadingOverlay.style.display = 'none';
+                    statusIndicator.classList.add('status-active');
+                    statusIndicator.classList.remove('status-inactive');
+                    statusText.textContent = 'Cámara activa';
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                } else {
+                    videoFeed.classList.add('d-none');
+                    loadingOverlay.style.display = 'flex';
+                    statusIndicator.classList.add('status-inactive');
+                    statusIndicator.classList.remove('status-active');
+                    statusText.textContent = 'Cámara detenida';
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                }
+            }
+
+            // Escuchar clics en opciones de cámara
+            document.querySelectorAll('[data-camera-id]').forEach(item => {
+                item.addEventListener('click', event => {
+                    selectedCameraId = event.target.dataset.cameraId;
+                    const selectedText = event.target.textContent;
+                    document.getElementById('cameraSourceDropdown').innerHTML = `<i class="fas fa-camera me-2"></i>${selectedText}`;
+                    console.log(`Cámara seleccionada: ${selectedCameraId}`);
+                });
+            });
+            
+            // Función para mostrar errores
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorAlert.classList.remove('d-none');
+            }
+            
+            // Función para manejar errores de transmisión de video
+            videoFeed.addEventListener('error', (e) => {
+                console.error('Error en transmisión de video:', e);
+                if (cameraActive) {
+                    showError("Error en la transmisión de video. Intente reiniciar la cámara.");
+                }
+            });
+            
+            // Manejar inicio de la cámara
+            startButton.addEventListener('click', async () => {
+                infoText.textContent = "Iniciando cámara...";
+                videoText.textContent = "Iniciando cámara...";
+                videoSpinner.style.display="inline-block";
+                errorAlert.classList.add('d-none');
+                
+                // Construir datos para enviar al servidor
+                const data = {
+                    camera_id: selectedCameraId
+                };
+                
+                try {
+                    const response = await fetch('/camera/start', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const responseData = await response.json();
+                    console.log('Cámara iniciada:', responseData);
+                    
+                    if (response.ok) {
+                        updateUI(true);
+                        videoSpinner.style.display="none";
+                        infoText.textContent = "Detectando rostros...";
+                        
+                        // Actualizar la fuente del video después de iniciar la cámara
+                        videoFeed.src = '/camera/video_feed?' + new Date().getTime();
+                        
+                    } else {
+                        updateUI(false);
+                        infoText.textContent = "";
+                        showError(`Error: ${responseData.status}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    updateUI(false);
+                    infoText.textContent = "";
+                    showError("Error al comunicarse con el servidor. Verifique la consola para más detalles.");
+                }
+            });
+            
+            // Manejar detención de la cámara
+            stopButton.addEventListener('click', async () => {
+                infoText.textContent = "Deteniendo cámara...";
+                videoText.textContent = "Cámara detenida";
+                try {
+                    const response = await fetch('/camera/stop', {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    console.log(data);
+                    
+                    if (response.ok) {
+                        updateUI(false);
+                        infoText.textContent = "";
+                        videoFeed.src = ""; // Limpiar el src para detener la carga
+                    } else {
+                        infoText.textContent = `Error: ${data.status}`;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    infoText.textContent = "Error al comunicarse con el servidor";
+                }
+            });
+            
+            // Manejar reinicio del sistema
+            resetButton.addEventListener('click', async () => {
+                infoText.textContent = "Reiniciando sistema...";
+                errorAlert.classList.add('d-none');
+                
+                try {
+                    const response = await fetch('/camera/reset', {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    console.log(data);
+                    
+                    // Actualizar estado independientemente de la respuesta
+                    updateUI(false);
+                    infoText.textContent = "";
+                    videoFeed.src = ""; // Limpiar el src para detener la carga
+                    
+                } catch (error) {
+                    console.error('Error al reiniciar:', error);
+                    showError("Error al reiniciar. Es posible que deba recargar la página.");
+                }
+            });
+            
+            // Manejar actualización del modelo
+            updateModelButton.addEventListener('click', async () => {
+                if (cameraActive) {
+                    showError("Detenga la cámara antes de actualizar el modelo");
+                    return;
+                }
+                
+                infoText.textContent = "Actualizando modelo...";
+                updateModelButton.disabled = true;
+                
+                try {
+                    const response = await fetch('/recognition/update_model', {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    console.log(data);
+                    
+                    if (response.ok) {
+                        infoText.textContent = `Rostros conocidos: ${data.known_faces}`;
+                        // Mostrar mensaje de éxito
+                        const successAlert = document.createElement('div');
+                        successAlert.className = 'alert alert-success mt-3';
+                        successAlert.innerHTML = `
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Modelo actualizado:</strong> ${data.known_faces} rostros registrados
+                            <button type="button" class="btn-close float-end" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        
+                        // Insertar antes de la alerta de error
+                        errorAlert.parentNode.insertBefore(successAlert, errorAlert);
+                        
+                        // Eliminar después de 5 segundos
+                        setTimeout(() => {
+                            successAlert.remove();
+                        }, 5000);
+                    } else {
+                        showError(`Error: ${data.status}`);
+                    }
+                } catch (error) {
+                    console.error('Error al actualizar modelo:', error);
+                    showError("Error al comunicarse con el servidor");
+                } finally {
+                    updateModelButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
